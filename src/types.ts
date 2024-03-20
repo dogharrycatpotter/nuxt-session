@@ -207,7 +207,6 @@ export interface ModulePublicRuntimeConfig {
 export declare interface Session {
   id: string;
   createdAt: Date;
-  ip?: string;
 
   [key: string]: any;
 }

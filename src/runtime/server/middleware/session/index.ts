@@ -5,7 +5,6 @@ import dayjs from 'dayjs'
 import onHeaders from 'on-headers'
 import { SameSiteOptions, Session, SessionOptions } from '../../../../types'
 import { dropStorageSession, getStorageSession, setStorageSession } from './storage'
-import { processSessionIp, getHashedIpAddress } from './ipPinning'
 import { SessionExpired } from './exceptions'
 import { createError, useRuntimeConfig } from '#imports'
 
@@ -83,11 +82,6 @@ const getSession = async (event: H3Event): Promise<null | Session> => {
     // 3. Is the session not expired?
     if (sessionExpiryInSeconds !== false) {
       checkSessionExpirationTime(session, sessionExpiryInSeconds)
-    }
-
-    // 4. Check for IP pinning logic
-    if (sessionOptions.ipPinning) {
-      await processSessionIp(event, session)
     }
   } catch {
     await deleteSession(event) // Cleanup old session data to avoid leaks
@@ -189,7 +183,6 @@ export default eventHandler(async (event: H3Event) => {
 
       if (isInit) {
         if (isModified() || isTouch) {
-          event.context.session.ip = sessionOptions.ipPinning ? await getHashedIpAddress(event) : undefined
           await setStorageSession(event.context.sessionId, event.context.session)
         }
       } else if (isModified() || isTouch) {

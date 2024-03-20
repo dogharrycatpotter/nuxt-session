@@ -11,8 +11,7 @@ export default eventHandler(async (event) => {
   event.context.session = {
     ...body,
     id: event.context.session.id,
-    createdAt: event.context.session.createdAt,
-    ip: event.context.session.ip
+    createdAt: event.context.session.createdAt
   }
 
   return event.context.session
