@@ -9,21 +9,12 @@ import type { LocalStorageOptions } from 'unstorage/dist/drivers/localstorage'
 import type { RedisOptions } from 'unstorage/dist/drivers/redis'
 
 export type SameSiteOptions = 'lax' | 'strict' | 'none'
-export type SupportedSessionApiMethods = 'patch' | 'delete' | 'get' | 'post'
 
 export type UnstorageDriverOption = FSStorageOptions | KVOptions | KVHTTPOptions | GithubOptions | HTTPOptions | OverlayStorageOptions | LocalStorageOptions | RedisOptions
 
 export interface StorageOptions {
   driver: BuiltinDriverName,
   options?: UnstorageDriverOption
-}
-export interface SessionIpPinningOptions {
-  /**
-   * The name of the HTTP header used to retrieve the forwarded (real) IP address of the user
-   * @example 'X-Forwarded-For'
-   * @type string
-   */
-  headerName: string;
 }
 
 export interface SessionOptions {
@@ -72,7 +63,7 @@ export interface SessionOptions {
    * @type boolean
    * @docs https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#restrict_access_to_cookies
    */
-   cookieHttpOnly: boolean
+  cookieHttpOnly: boolean
   /**
    * The name of the session ID cookie to set in the response (and read from in the request). The default value is 'sessionId'
    * @default 'sessionId'
@@ -111,47 +102,12 @@ export interface SessionOptions {
    */
   domain: string | false,
   /**
-   * Whether to pin sessions to the user's IP (i.e. Different IP means a different session)
-   * @default false
-   * @example
-   *   {
-   *     headerName: "X-Forwarded-For"
-   *   }
-   * @type {SessionIpPinningOptions|boolean}
-   */
-  ipPinning: SessionIpPinningOptions|boolean,
-  /**
    * Force the session identifier cookie to be set on every response. The expiration is reset to the original expiryInSeconds, resetting the expiration countdown.
    * @default false
    * @example true
    * @type boolean
    */
   rolling: boolean
-}
-
-export interface ApiOptions {
-  /**
-   * Whether to enable the session API endpoints that allow read, update and delete operations from the client side. Use `/api/session` to access the endpoints.
-   * @default true
-   * @example false
-   * @type boolean
-   */
-  isEnabled: boolean;
-  /**
-   * Configure which session API methods are enabled. All api methods are enabled by default. Restricting the enabled methods can be useful if you want to allow the client to read session-data but not modify it. Passing
-   * an empty array will result in all API methods being registered. Disable the api via the `api.isEnabled` option.
-   * @default []
-   * @example ['get']
-   * @type SupportedSessionApiMethods[]
-   */
-  methods: SupportedSessionApiMethods[];
-  /**
-   * Base path of the session api.
-   * @default /api/session
-   * @example /_session
-   * @type string
-   */
-  basePath: string;
 }
 
 export interface ModuleOptions {
@@ -167,11 +123,6 @@ export interface ModuleOptions {
    * @type SessionOptions
    */
   session: Partial<SessionOptions>
-  /**
-   * Configure session-api and composable-behavior
-   * @type ApiOptions
-   */
-  api: Partial<ApiOptions>
 }
 
 export interface FilledModuleOptions {
@@ -186,12 +137,6 @@ export interface FilledModuleOptions {
    * @type SessionOptions
    */
   session: SessionOptions,
-
-  /**
-   * Session-api and composable-behavior configuration
-   * @type ApiOptions
-   */
-  api: ApiOptions
 }
 
 export interface ModuleRuntimeConfig {
@@ -200,7 +145,7 @@ export interface ModuleRuntimeConfig {
 
 export interface ModulePublicRuntimeConfig {
   session: {
-    api: ModuleRuntimeConfig['session']['api'];
+    api: ModuleRuntimeConfig['session'];
   };
 }
 

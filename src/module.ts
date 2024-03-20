@@ -1,12 +1,9 @@
-import { addImportsDir, addServerHandler, createResolver, defineNuxtModule, useLogger } from '@nuxt/kit'
+import { createResolver, defineNuxtModule, useLogger } from '@nuxt/kit'
 import { defu } from 'defu'
 import { builtinDrivers } from 'unstorage'
 import type {
   FilledModuleOptions,
-  ModuleOptions,
-  ModulePublicRuntimeConfig,
-  SessionIpPinningOptions,
-  SupportedSessionApiMethods
+  ModuleOptions
 } from './types'
 
 const PACKAGE_NAME = 'nuxt-session'
@@ -28,13 +25,7 @@ const defaults: FilledModuleOptions = {
       options: {}
     },
     domain: false,
-    ipPinning: false as boolean|SessionIpPinningOptions,
     rolling: false
-  },
-  api: {
-    isEnabled: true,
-    methods: [] as SupportedSessionApiMethods[],
-    basePath: '/api/session'
   }
 } as const
 
@@ -61,17 +52,9 @@ export default defineNuxtModule<ModuleOptions>({
 
     // 2. Set public and private runtime configuration
     const options = defu(moduleOptions, defaults)
-    if (moduleOptions.api.methods && moduleOptions.api.methods.length > 0) {
-      options.api.methods = moduleOptions.api.methods
-    } else {
-      options.api.methods = ['patch', 'delete', 'get', 'post']
-    }
 
     // @ts-ignore TODO: Fix this `nuxi prepare` bug (see https://github.com/nuxt/framework/issues/8728)
     nuxt.options.runtimeConfig.session = defu(nuxt.options.runtimeConfig.session, options) as FilledModuleOptions
-
-    const publicConfig: ModulePublicRuntimeConfig = { session: { api: options.api } }
-    nuxt.options.runtimeConfig.public = defu(nuxt.options.runtimeConfig.public, publicConfig)
 
     // setup unstorage
     nuxt.options.nitro.virtual = defu(nuxt.options.nitro.virtual, {
@@ -90,21 +73,6 @@ export default defineNuxtModule<ModuleOptions>({
       handler
     }
     nuxt.options.serverHandlers.unshift(serverHandler)
-
-    // 5. Register desired session API endpoints
-    if (options.api.isEnabled) {
-      for (const apiMethod of options.api.methods) {
-        const handler = resolve(`./runtime/server/api/session.${apiMethod}`)
-        addServerHandler({ handler, route: options.api.basePath })
-      }
-      logger.info(`Session API "${options.api.methods.join(', ')}" endpoints registered at "${options.api.basePath}"`)
-    } else {
-      logger.info('Session API disabled')
-    }
-
-    // 6. Add nuxt-session composables
-    const composables = resolve('./runtime/composables')
-    addImportsDir(composables)
 
     logger.success('Session setup complete')
   }
