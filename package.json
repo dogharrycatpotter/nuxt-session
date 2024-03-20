@@ -21,7 +21,6 @@
   ],
   "scripts": {
     "prepack": "nuxt-module-build",
-    "prepare": "npm run dev:prepare && nuxt-module-build",
     "dev": "nuxi dev playground",
     "dev:build": "nuxi build playground",
     "dev:prepare": "nuxt-module-build --stub && nuxi prepare playground",
@@ -29,7 +28,8 @@
     "types": "tsc --noEmit",
     "build:module": "nuxi build",
     "build:playground": "nuxi build playground",
-    "start:playground": "node playground/.output/server/index.mjs"
+    "start:playground": "node playground/.output/server/index.mjs",
+    "prepare": "npm run build:playground && npm run prepack"
   },
   "dependencies": {
     "@nuxt/kit": "^3.0.0",
