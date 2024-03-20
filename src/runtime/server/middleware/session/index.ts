@@ -1,13 +1,14 @@
+import crypto from 'crypto'
 import { deleteCookie, eventHandler, H3Event, parseCookies, setCookie } from 'h3'
 import { nanoid } from 'nanoid'
 import dayjs from 'dayjs'
+import onHeaders from 'on-headers'
 import { SameSiteOptions, Session, SessionOptions } from '../../../../types'
 import { dropStorageSession, getStorageSession, setStorageSession } from './storage'
 import { processSessionIp, getHashedIpAddress } from './ipPinning'
 import { SessionExpired } from './exceptions'
-import { useRuntimeConfig } from '#imports'
+import { createError, useRuntimeConfig } from '#imports'
 
-const SESSION_COOKIE_NAME = 'sessionId'
 const safeSetCookie = (event: H3Event, name: string, value: string, createdAt: Date) => {
   const sessionOptions = useRuntimeConfig().session.session as SessionOptions
   const expirationDate = sessionOptions.expiryInSeconds !== false
@@ -35,25 +36,10 @@ const checkSessionExpirationTime = (session: Session, sessionExpiryInSeconds: nu
   }
 }
 
-/**
- * Get the current session id.
- *
- * The session id may be set only on the cookie or only on the context or both. This is because when the
- * session was just created, the session cookie is not yet set on the request (only on the response!). To
- * still function in this scenario the session-middleware sets the cookie on the response and the `sessionId` on the `event.context`.
- *
- * This method extracts the session id and ensures that if the id on cookie and context match if both exist.
- * @param event H3Event Event passing through middleware
- */
 const getCurrentSessionId = (event: H3Event) => {
-  const sessionIdRequest = parseCookies(event).sessionId
-  const sessionIdContext = event.context.sessionId
-
-  if (sessionIdContext && sessionIdRequest && sessionIdContext !== sessionIdRequest) {
-    return null
-  }
-
-  return sessionIdRequest || sessionIdContext || null
+  const sessionOptions = useRuntimeConfig().session.session
+  const sessionIdRequest = parseCookies(event)[sessionOptions.cookieName]
+  return sessionIdRequest
 }
 
 export const deleteSession = async (event: H3Event) => {
@@ -62,27 +48,18 @@ export const deleteSession = async (event: H3Event) => {
     await dropStorageSession(currentSessionId)
   }
 
-  deleteCookie(event, SESSION_COOKIE_NAME)
+  const sessionOptions = useRuntimeConfig().session.session as SessionOptions
+
+  deleteCookie(event, sessionOptions.cookieName)
+
+  delete event.context.sessionId
+  delete event.context.session
 }
 
-const newSession = async (event: H3Event) => {
-  const runtimeConfig = useRuntimeConfig()
-  const sessionOptions = runtimeConfig.session.session as SessionOptions
-  const now = new Date()
-
-  // (Re-)Set cookie
-  const sessionId = nanoid(sessionOptions.idLength)
-  safeSetCookie(event, SESSION_COOKIE_NAME, sessionId, now)
-
-  // Store session data in storage
-  const session: Session = {
-    id: sessionId,
-    createdAt: now,
-    ip: sessionOptions.ipPinning ? await getHashedIpAddress(event) : undefined
-  }
-  await setStorageSession(sessionId, session)
-
-  return session
+const reNewSession = async (event: H3Event) => {
+  const body = { ...event.context.session }
+  await deleteSession(event)
+  await createSession(event, body)
 }
 
 const getSession = async (event: H3Event): Promise<null | Session> => {
@@ -121,43 +98,105 @@ const getSession = async (event: H3Event): Promise<null | Session> => {
   return session
 }
 
-const updateSessionExpirationDate = (session: Session, event: H3Event) => {
-  const now = new Date()
-  safeSetCookie(event, SESSION_COOKIE_NAME, session.id, now)
-  return { ...session, createdAt: now }
-}
-
 function isSession (shape: unknown): shape is Session {
   return typeof shape === 'object' && !!shape && 'id' in shape && 'createdAt' in shape
 }
 
-const ensureSession = async (event: H3Event) => {
-  const sessionOptions = useRuntimeConfig().session.session as SessionOptions
+const hash = (session: Session) => {
+  const str = JSON.stringify(session)
+  return crypto.createHash('sha1').update(str, 'utf8').digest('hex')
+}
 
-  let session = await getSession(event)
-  if (!session) {
-    session = await newSession(event)
-  } else if (sessionOptions.rolling) {
-    session = updateSessionExpirationDate(session, event)
+const createSession = (event: H3Event, initBody?: Session) => {
+  const sessionOptions = useRuntimeConfig().session.session
+  const now = new Date()
+  if (initBody) {
+    event.context.session = { ...initBody }
   }
-
-  event.context.sessionId = session.id
-  event.context.session = session
-  return session
+  event.context.sessionId = nanoid(sessionOptions.idLength)
+  event.context.session.id = event.context.sessionId
+  event.context.session.createdAt = now
 }
 
 export default eventHandler(async (event: H3Event) => {
-  // 1. Ensure that a session is present by either loading or creating one
-  await ensureSession(event)
-
-  // 2. Setup a hook that saves any changed made to the session by the subsequent endpoints & middlewares
-  event.res.on('finish', async () => {
-    // Session id may not exist if session was deleted
+  try {
+    const sessionOptions = useRuntimeConfig().session.session
     const session = await getSession(event)
-    if (!session) {
-      return
+
+    let isInit = true
+    if (session) {
+      event.context.sessionId = session.id
+      event.context.session = session
+      isInit = false
+    } else {
+      event.context.sessionId = ''
+      event.context.session = {}
     }
 
-    await setStorageSession(session.id, event.context.session)
-  })
+    let isTouch = false
+    let isReNew = false
+    event.context.sessionFn = {
+      async destroy () {
+        await deleteSession(event)
+      },
+      async regenerate () {
+        await reNewSession(event)
+        isReNew = true
+      },
+      touch () {
+        isTouch = true
+      }
+    }
+
+    const preSessionId = event.context.sessionId
+    const preSessionHash = hash(event.context.session)
+
+    const isDestory = (event: H3Event): boolean => {
+      return !event.context.sessionId && !event.context.session
+    }
+
+    const isModified = (): boolean => {
+      return preSessionId !== postSessionId || preSessionHash !== postSessionHash
+    }
+
+    let postSessionId
+    let postSessionHash
+
+    onHeaders(event.node.res, () => {
+      if (isDestory(event)) {
+        return
+      }
+
+      postSessionId = event.context.sessionId
+      postSessionHash = hash(event.context.session)
+
+      if (isInit) {
+        if (isModified() || isTouch) {
+          createSession(event)
+          safeSetCookie(event, sessionOptions.cookieName, event.context.sessionId, event.context.session.createdAt)
+        }
+      } else if (sessionOptions.rolling || (sessionOptions.expiryInSeconds !== false && (isModified() || isTouch)) || (isReNew && (isModified() || isTouch))) {
+        const now = new Date()
+        event.context.session.createdAt = now
+        safeSetCookie(event, sessionOptions.cookieName, event.context.sessionId, event.context.session.createdAt)
+      }
+    })
+
+    event.node.res.on('finish', async () => {
+      if (isDestory(event)) {
+        return
+      }
+
+      if (isInit) {
+        if (isModified() || isTouch) {
+          event.context.session.ip = sessionOptions.ipPinning ? await getHashedIpAddress(event) : undefined
+          await setStorageSession(event.context.sessionId, event.context.session)
+        }
+      } else if (isModified() || isTouch) {
+        await setStorageSession(event.context.sessionId, event.context.session)
+      }
+    })
+  } catch (err) {
+    throw createError({ message: err.message, statusCode: err.statusCode, cause: err, fatal: true })
+  }
 })

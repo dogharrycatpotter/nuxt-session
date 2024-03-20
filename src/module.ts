@@ -20,6 +20,9 @@ const defaults: FilledModuleOptions = {
     cookieSameSite: 'lax',
     cookieSecure: true,
     cookieHttpOnly: true,
+    cookieName: 'sessionId',
+    resave: false,
+    saveUninitialized: false,
     storageOptions: {
       driver: 'memory',
       options: {}

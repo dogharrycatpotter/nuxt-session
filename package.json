@@ -36,6 +36,7 @@
     "dayjs": "^1.11.6",
     "defu": "^6.1.0",
     "h3": "^1.0.1",
+    "on-headers": "^1.0.2",
     "unstorage": "^1.0.1"
   },
   "devDependencies": {

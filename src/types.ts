@@ -74,6 +74,28 @@ export interface SessionOptions {
    */
    cookieHttpOnly: boolean
   /**
+   * The name of the session ID cookie to set in the response (and read from in the request). The default value is 'sessionId'
+   * @default 'sessionId'
+   * @example 'sessionId'
+   * @type string
+   * @docs https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies#restrict_access_to_cookies
+   */
+  cookieName: string
+  /**
+   * Wether to forces the session to be saved back to the session store. Currently only supports false
+   * @default false
+   * @example false
+   * @type
+   */
+  resave: boolean
+  /**
+   * Wether to forces a session that is "uninitialized" to be saved to the store. Currently only supports false
+   * @default false
+   * @example false
+   * @type boolean
+   */
+  saveUninitialized: boolean
+  /**
    * Driver configuration for session-storage. Per default in-memory storage is used
    * @default { driver: 'memory', options: {} }
    * @example { driver: 'redis', options: {url: 'redis://localhost:6739' } }
