@@ -41,15 +41,16 @@ const getCurrentSessionId = (event: H3Event) => {
   return sessionIdRequest
 }
 
-export const deleteSession = async (event: H3Event) => {
+export const deleteSession = async (event: H3Event, isDeleteCookie = true) => {
   const currentSessionId = getCurrentSessionId(event)
   if (currentSessionId) {
     await dropStorageSession(currentSessionId)
   }
 
-  const sessionOptions = useRuntimeConfig().session.session as SessionOptions
-
-  deleteCookie(event, sessionOptions.cookieName)
+  if (isDeleteCookie) {
+    const sessionOptions = useRuntimeConfig().session.session as SessionOptions
+    deleteCookie(event, sessionOptions.cookieName)
+  }
 
   delete event.context.sessionId
   delete event.context.session
@@ -57,7 +58,7 @@ export const deleteSession = async (event: H3Event) => {
 
 const reNewSession = async (event: H3Event) => {
   const body = { ...event.context.session }
-  await deleteSession(event)
+  await deleteSession(event, false)
   await createSession(event, body)
 }
 
