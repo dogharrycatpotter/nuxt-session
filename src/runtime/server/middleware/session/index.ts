@@ -114,7 +114,7 @@ const createSession = (event: H3Event, initBody?: Session) => {
 }
 
 export default eventHandler(async (event: H3Event) => {
-  if (event.req.isIpxReq) return;
+  if (event.node.req.isIpxReq) return;
   try {
     const sessionOptions = useRuntimeConfig().session.session
     const session = await getSession(event)
