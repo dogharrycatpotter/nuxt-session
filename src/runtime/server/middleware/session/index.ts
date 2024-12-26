@@ -178,19 +178,43 @@ export default eventHandler(async (event: H3Event) => {
       }
     })
 
-    event.node.res.on('finish', async () => {
-      if (isDestory(event)) {
-        return
-      }
-
-      if (isInit) {
-        if (isModified() || isTouch) {
-          await setStorageSession(event.context.sessionId, event.context.session)
+    if (sessionOptions.saveAsync) {
+      event.node.res.on('finish', () => {
+        if (isDestory(event)) {
+          return
         }
-      } else if (isModified() || isTouch) {
-        await setStorageSession(event.context.sessionId, event.context.session)
+        try {
+          if (isInit) {
+            if (isModified() || isTouch) {
+              setStorageSession(event.context.sessionId, event.context.session)
+            }
+          } else if (isModified() || isTouch) {
+            setStorageSession(event.context.sessionId, event.context.session)
+          }
+        } catch (err) {
+          console.error('Failed to save session:', err);
+        }
+      })
+    } else {
+      const originalEnd = event.node.res.end;
+      event.node.res.end = async (chunk, encoding, callback) => {
+        if (isDestory(event)) {
+          return originalEnd.call(event.node.res, chunk, encoding, callback)
+        }
+        try {
+          if (isInit) {
+            if (isModified() || isTouch) {
+              await setStorageSession(event.context.sessionId, event.context.session)
+            }
+          } else if (isModified() || isTouch) {
+            await setStorageSession(event.context.sessionId, event.context.session)
+          }
+        } catch (err) {
+          console.error('Failed to save session:', err)
+        }
+        return originalEnd.call(event.node.res, chunk, encoding, callback)
       }
-    })
+    }
   } catch (err) {
     throw createError({ message: err.message, statusCode: err.statusCode, cause: err, fatal: true })
   }

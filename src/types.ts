@@ -87,6 +87,13 @@ export interface SessionOptions {
    */
   saveUninitialized: boolean
   /**
+   * Whether to perform the save process asynchronously. The default value is false
+   * @default false
+   * @example false
+   * @type boolean
+   */
+  saveAsync: boolean
+  /**
    * Driver configuration for session-storage. Per default in-memory storage is used
    * @default { driver: 'memory', options: {} }
    * @example { driver: 'redis', options: {url: 'redis://localhost:6739' } }
