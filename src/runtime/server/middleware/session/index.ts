@@ -114,7 +114,9 @@ const createSession = (event: H3Event, initBody?: Session) => {
 }
 
 export default eventHandler(async (event: H3Event) => {
-  if (event.node.req.isIpxReq) return;
+  // @ts-ignore
+  // eslint-disable-next-line
+  if (event.node.req.isIpxReq) return
   try {
     const sessionOptions = useRuntimeConfig().session.session
     const session = await getSession(event)
@@ -163,12 +165,16 @@ export default eventHandler(async (event: H3Event) => {
         return
       }
 
-      postSessionId = event.context.sessionId
-      postSessionHash = hash(event.context.session)
+      if (!postSessionId) {
+        postSessionId = event.context.sessionId
+        postSessionHash = hash(event.context.session)
+      }
 
       if (isInit) {
         if (isModified() || isTouch) {
-          createSession(event)
+          if (!event.context.sessionId) {
+            createSession(event)
+          }
           safeSetCookie(event, sessionOptions.cookieName, event.context.sessionId, event.context.session.createdAt)
         }
       } else if (sessionOptions.rolling || (sessionOptions.expiryInSeconds !== false && (isModified() || isTouch)) || (isReNew && (isModified() || isTouch))) {
@@ -183,6 +189,7 @@ export default eventHandler(async (event: H3Event) => {
         if (isDestory(event)) {
           return
         }
+
         try {
           if (isInit) {
             if (isModified() || isTouch) {
@@ -192,24 +199,43 @@ export default eventHandler(async (event: H3Event) => {
             setStorageSession(event.context.sessionId, event.context.session)
           }
         } catch (err) {
-          console.error('Failed to save session:', err);
+          // eslint-disable-next-line
+          console.error('Failed to save session:', err)
         }
       })
     } else {
-      const originalEnd = event.node.res.end;
-      event.node.res.end = async (chunk, encoding, callback) => {
+      const originalEnd = event.node.res.end
+      let isSaved = false
+      // @ts-ignore
+      event.node.res.end = async (chunk: any, encoding?: BufferEncoding, callback?: () => void) => {
         if (isDestory(event)) {
           return originalEnd.call(event.node.res, chunk, encoding, callback)
         }
+
+        if (!postSessionId) {
+          postSessionId = event.context.sessionId
+          postSessionHash = hash(event.context.session)
+        }
+
         try {
           if (isInit) {
             if (isModified() || isTouch) {
-              await setStorageSession(event.context.sessionId, event.context.session)
+              if (!isSaved) {
+                isSaved = true
+                if (!event.context.sessionId) {
+                  createSession(event)
+                }
+                await setStorageSession(event.context.sessionId, event.context.session)
+              }
             }
           } else if (isModified() || isTouch) {
-            await setStorageSession(event.context.sessionId, event.context.session)
+            if (!isSaved) {
+              isSaved = true
+              await setStorageSession(event.context.sessionId, event.context.session)
+            }
           }
         } catch (err) {
+          // eslint-disable-next-line
           console.error('Failed to save session:', err)
         }
         return originalEnd.call(event.node.res, chunk, encoding, callback)
